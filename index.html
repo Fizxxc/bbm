@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Cek Konsumsi Motor (PWA)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="manifest" href="manifest.json" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="apple-touch-icon" href="icon.png" />
+  <meta name="theme-color" content="#1e3a8a" />
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-6">
+  <div class="bg-white p-6 rounded-xl shadow-xl w-full max-w-xl">
+    <h1 class="text-2xl font-bold mb-4 text-center text-blue-700">🛵 Cek Konsumsi Motor</h1>
+
+    <label class="block mb-2 text-sm text-gray-700">Telegram ID (agar hasil dikirim)</label>
+    <input type="number" id="telegramId" placeholder="Contoh: 123456789" class="w-full p-2 mb-4 border rounded" />
+
+    <label class="block mb-2 text-sm font-medium text-gray-700">Tipe Motor</label>
+    <select id="motor" class="w-full p-2 border rounded mb-4">
+      <option value="" disabled selected>Pilih motor</option>
+      <option value="Scoopy">Honda Scoopy</option>
+      <option value="Vario">Honda Vario 125</option>
+      <option value="NMAX">Yamaha NMAX</option>
+      <option value="Aerox">Yamaha Aerox</option>
+      <option value="Mio">Yamaha Mio</option>
+      <option value="Beat">Honda Beat</option>
+      <option value="Custom">Motor Lainnya</option>
+    </select>
+
+    <div id="input-section" class="hidden">
+      <input id="jarak" type="number" placeholder="Jarak Tempuh (km)" class="w-full p-2 border rounded mb-2" />
+      <input id="liter" type="number" placeholder="Jumlah Bensin (liter)" class="w-full p-2 border rounded mb-2" />
+      <input id="harga" type="number" placeholder="Harga Bensin per Liter (Rp)" class="w-full p-2 border rounded mb-4" />
+      <button onclick="hitungKonsumsi()" class="bg-blue-600 text-white w-full p-2 rounded">Hitung</button>
+    </div>
+
+    <div id="hasil" class="text-center mt-4 hidden text-green-700 font-medium"></div>
+    <div id="chartContainer" class="mt-6 hidden"><canvas id="grafik"></canvas></div>
+  </div>
+
+  <script>
+    const motorSelect = document.getElementById("motor");
+    const inputSection = document.getElementById("input-section");
+    const hasil = document.getElementById("hasil");
+    const chartContainer = document.getElementById("chartContainer");
+    const telegramIdInput = document.getElementById("telegramId");
+
+    let chart = null;
+
+    motorSelect.addEventListener("change", () => {
+      inputSection.classList.remove("hidden");
+      hasil.classList.add("hidden");
+      chartContainer.classList.add("hidden");
+    });
+
+    function hitungKonsumsi() {
+      const id = telegramIdInput.value;
+      const jarak = parseFloat(document.getElementById("jarak").value);
+      const liter = parseFloat(document.getElementById("liter").value);
+      const harga = parseFloat(document.getElementById("harga").value);
+      const motor = motorSelect.value;
+
+      if (!id || isNaN(jarak) || isNaN(liter) || isNaN(harga) || liter <= 0 || harga <= 0) {
+        hasil.innerText = "⚠️ Isi semua kolom dengan benar.";
+        hasil.classList.remove("hidden");
+        hasil.classList.add("text-red-600");
+        return;
+      }
+
+      const kmPerLiter = jarak / liter;
+      const biayaPerKM = (liter * harga) / jarak;
+
+      let standar = 0;
+      switch (motor) {
+        case "Scoopy": standar = 59; break;
+        case "Vario": standar = 51; break;
+        case "NMAX": standar = 43; break;
+        case "Aerox": standar = 42; break;
+        case "Mio": standar = 50; break;
+        case "Beat": standar = 60; break;
+      }
+
+      let hasilText = `Konsumsi: ${kmPerLiter.toFixed(2)} km/l\nBiaya per km: Rp${biayaPerKM.toFixed(0)}`;
+      if (standar > 0) {
+        hasilText += kmPerLiter >= standar - 5 ? `\n✅ Irit` : `\n❌ Boros`;
+      }
+
+      hasil.innerText = hasilText.replace(/\n/g, '\n');
+      hasil.classList.remove("hidden", "text-red-600");
+      hasil.classList.add("text-green-700");
+
+      // grafik
+      chartContainer.classList.remove("hidden");
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById('grafik'), {
+        type: 'bar',
+        data: {
+          labels: ['Standar', 'Hasil Anda'],
+          datasets: [{
+            data: [standar || 0, kmPerLiter],
+            backgroundColor: ['#10b981', '#3b82f6']
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          title: { display: true, text: 'Perbandingan Konsumsi' },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+
+      // Kirim ke Bot Telegram
+      fetch(`https://api.telegram.org/bot6439522031:AAGphEnYCdsDVZQYt-a6mMZmV0zqZ2g6RC8/sendMessage`, {
+        method: "POST",
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: id,
+          text: `🚀 Hasil Konsumsi Motor:\nMotor: ${motor}\nJarak: ${jarak} km\nLiter: ${liter} L\nHarga: Rp${harga}\n\n💡 ${hasilText}`,
+          parse_mode: "Markdown"
+        })
+      });
+    }
+
+    // PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+  </script>
+</body>
+</html>
